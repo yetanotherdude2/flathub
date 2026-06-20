@@ -1,0 +1,160 @@
+app-id: net.imput.helium
+runtime: org.freedesktop.Platform
+runtime-version: "25.08"
+sdk: org.freedesktop.Sdk
+command: helium
+supported-arches: [x86_64, aarch64]
+
+x-annotations:
+  org.flatpak.metadata.name: "Helium"
+  org.flatpak.metadata.summary: "Private, fast, and honest web browser"
+  org.flatpak.metadata.description: |
+    Helium is a lightweight, privacy-focused browser built upon Ungoogled Chromium.
+    This Flatpak package uses the prebuilt binary provided by the Helium Linux project.
+    Community package, not affiliated with Helium developers.
+  org.flatpak.metadata.license: "GPL-3.0-or-later"
+  org.flatpak.metadata.homepage: "https://github.com/imputnet/helium-linux"
+
+finish-args:
+  - --share=network
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --socket=cups # allow printing
+  - --socket=pcsc
+  - --device=dri
+  - --device=all
+  - --socket=pulseaudio
+  - --allow=bluetooth
+  # D-bus names to allow inhibiting sleep, enable media controls, and other stuff
+  # Based on com.Google.Chrome flatpak
+  - --system-talk-name=org.bluez
+  - --system-talk-name=org.freedesktop.UPower
+  - --talk-name=org.freedesktop.FileManager1
+  - --talk-name=org.freedesktop.Notifications
+  - --talk-name=org.freedesktop.ScreenSaver
+  - --talk-name=org.freedesktop.secrets
+  - --talk-name=org.gnome.SessionManager
+  - --talk-name=org.kde.StatusNotifierWatcher
+  - --system-talk-name=org.freedesktop.Avahi
+  - --own-name=org.mpris.MediaPlayer2.chromium.*
+  - --filesystem=xdg-download
+  - --filesystem=xdg-pictures
+  - --filesystem=xdg-videos
+  - --filesystem=xdg-desktop
+  - --persist=.pki
+  - --env=LD_LIBRARY_PATH=/app/lib/helium:$LD_LIBRARY_PATH
+  - --env=CHROME_DEVEL_SANDBOX_DISABLED=1
+  - --env=ICU_DATA_PATH=/app/lib/helium
+  # Allow PWAs
+  - --filesystem=home/.local/share/applications:create
+  - --filesystem=home/.local/share/icons:create
+  # GNOME-specific
+  - --filesystem=xdg-run/dconf
+  - --filesystem=~/.config/dconf:ro
+  - --talk-name=ca.desrt.dconf
+  - --env=DCONF_USER_CONFIG_DIR=.config/dconf
+  - --env=GIO_EXTRA_MODULES=/app/lib/gio/modules
+  - --env=GSETTINGS_BACKEND=dconf
+  # KDE-specific
+  - --filesystem=~/.config/kioslaverc
+  # Distribution EnvVar
+  - --env=CHROME_VERSION_EXTRA="Flatpak"
+
+modules:
+  - name: dconf
+    buildsystem: meson
+    config-opts:
+      - -Dbash_completion=false
+      - -Dman=false
+      - -Dvapi=false
+    cleanup:
+      - /etc
+      - /include
+      - ca.desrt.dconf.service
+      - dconf.service
+      - dconf-service
+      - '*.pc'
+    sources:
+      - type: archive
+        url: https://download.gnome.org/sources/dconf/0.49/dconf-0.49.0.tar.xz
+        sha256: 16a47e49a58156dbb96578e1708325299e4c19eea9be128d5bd12fd0963d6c36
+        x-checker-data:
+          type: gnome
+          name: dconf
+          stable-only: true
+      # From: https://src.fedoraproject.org/rpms/dconf
+      - type: patch
+        path: dconf-override.patch
+
+  - name: zypak
+    sources:
+      - type: git
+        url: https://github.com/refi64/zypak
+        tag: v2025.09
+        commit: 693a71c5ffa80ec9c9ce2ae03b1ccc493c698e53
+        x-checker-data:
+          type: git
+          tag-pattern: ^v([\d.]+)$
+        
+  - name: helium
+    buildsystem: simple
+    build-commands:
+      - mkdir -p /app/lib/helium
+      - mkdir -p /app/bin
+      
+      - tar -xvf helium-linux.tar.xz -C /app/lib/helium --strip-components=1 --no-same-owner
+      
+      - mv /app/lib/helium/helium /app/lib/helium/helium.real
+      - chmod +x /app/lib/helium/helium.real
+
+      - install -Dm755 helium.sh /app/bin/helium
+      - install -Dm644 cobalt.ini /app/etc/cobalt.ini
+
+      - install -Dm644 net.imput.helium.desktop /app/share/applications/net.imput.helium.desktop
+
+      - mkdir -p icons/512x512 icons/256x256 icons/128x128 icons/64x64 icons/32x32
+      - cp net.imput.helium.png icons/512x512/ || true
+      - cp net.imput.helium.png icons/256x256/ || true
+      - cp net.imput.helium.png icons/128x128/ || true
+      - cp net.imput.helium.png icons/64x64/ || true
+      - cp net.imput.helium.png icons/32x32/ || true
+
+      - install -Dm644 icons/512x512/net.imput.helium.png /app/share/icons/hicolor/512x512/apps/net.imput.helium.png  
+      - install -Dm644 icons/256x256/net.imput.helium.png /app/share/icons/hicolor/256x256/apps/net.imput.helium.png
+      - install -Dm644 icons/128x128/net.imput.helium.png /app/share/icons/hicolor/128x128/apps/net.imput.helium.png
+      - install -Dm644 icons/64x64/net.imput.helium.png /app/share/icons/hicolor/64x64/apps/net.imput.helium.png
+      - install -Dm644 icons/32x32/net.imput.helium.png /app/share/icons/hicolor/32x32/apps/net.imput.helium.png
+
+      - install -Dm644 net.imput.helium.metainfo.xml ${FLATPAK_DEST}/share/metainfo/net.imput.helium.metainfo.xml
+
+    sources:
+      - type: file
+        only-arches: [x86_64]
+        url: https://github.com/imputnet/helium-linux/releases/download/0.13.4.1/helium-0.13.4.1-x86_64_linux.tar.xz
+        sha256: aedfffc1c0271fb9f5a25fcf7cfdfb6b11e92142ab59749037a4a2b06b44ee1c
+        dest-filename: helium-linux.tar.xz
+      - type: file
+        only-arches: [aarch64]
+        url: https://github.com/imputnet/helium-linux/releases/download/0.13.4.1/helium-0.13.4.1-arm64_linux.tar.xz
+        sha256: c661c3eb9254206e2fb95fc86ca203be8588a8c7b5e42e6a079fa37075c3be49
+        dest-filename: helium-linux.tar.xz
+        
+      - type: file
+        path: net.imput.helium.metainfo.xml
+      - type: file
+        path: net.imput.helium.desktop
+      - type: file
+        path: helium.sh
+      - type: file
+        path: cobalt.ini
+      - type: file
+        path: icons/32x32/net.imput.helium.png
+      - type: file
+        path: icons/64x64/net.imput.helium.png
+      - type: file
+        path: icons/128x128/net.imput.helium.png
+      - type: file
+        path: icons/256x256/net.imput.helium.png
+      - type: file
+        path: icons/512x512/net.imput.helium.png
